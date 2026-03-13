@@ -33,6 +33,9 @@ jobs:
 
       - name: Install SonarCloud Scanner
         run: dotnet tool install --global dotnet-sonarscanner
+      
+      - name: Install Coverage Tools
+        run: dotnet tool install --global dotnet-coverage
 
       - name: Begin SonarCloud Analysis
         env:
@@ -44,7 +47,7 @@ jobs:
             /o:"fiapxhack" \
             /d:sonar.host.url="https://sonarcloud.io" \
             /d:sonar.token="$SONAR_TOKEN" \
-            /d:sonar.cs.opencover.reportsPaths="**/coverage.opencover.xml" \
+            /d:sonar.cs.vscoveragexml.reportsPaths="**/TestResults/**/*.xml" \
             /d:sonar.coverage.exclusions="**/tests/**/*" \
             /d:sonar.exclusions="**/bin/**,**/obj/**,**/*.dll,**/*.exe,**/Migrations/**"
 
@@ -57,15 +60,18 @@ jobs:
             --configuration Release \
             --no-build \
             --verbosity normal \
-            --logger "trx;LogFileName=test-results.trx" \
-            --collect:"XPlat Code Coverage" \
-            --results-directory ./TestResults \
-            --settings coverlet.runsettings
+            --collect:"Code Coverage"
       
-      - name: List Coverage Files
+      - name: Convert Coverage to XML
         run: |
-          echo "=== Coverage files generated ==="
-          find . -name "coverage.opencover.xml" -type f -exec ls -lh {} \;
+          echo "=== Converting .coverage files to XML ==="
+          for file in $(find . -name "*.coverage" -type f); do
+            echo "Converting: $file"
+            dotnet-coverage merge -f xml -o "${file%.coverage}.xml" "$file"
+          done
+          echo ""
+          echo "=== Converted XML files ==="
+          find . -name "*.xml" -path "*/TestResults/*" -type f -exec ls -lh {} \;
 
       - name: End SonarCloud Analysis
         env:
@@ -76,5 +82,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report
-          path: '**/TestResults/**/coverage.opencover.xml'
+          path: '**/TestResults/**/*.xml'
           retention-days: 30
