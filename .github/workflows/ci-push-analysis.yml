@@ -1,0 +1,49 @@
+name: "Etapa: Análise de Pushes"
+on:
+  push:
+    branches-ignore:
+      - main
+
+jobs:
+  # Steps: Build, Testes e verificação de cobertura de código
+  analise-de-pushes:
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Configurar .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+
+      - name: Restaurar dependências
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --configuration Release --no-restore
+      
+      - name: Install dotnet-coverage tool
+        run: dotnet tool install --global dotnet-coverage
+
+      - name: Rodar Testes e Cobertura
+        run: |
+          dotnet test --configuration Release --no-build --verbosity normal \
+            --collect:"Code Coverage"
+      
+      - name: Converter cobertura para XML
+        run: |
+          echo "=== Converting .coverage files to XML ==="
+          for file in $(find . -name "*.coverage" -type f); do
+            echo "Converting: $file"
+            dotnet-coverage merge -f xml -o "${file%.coverage}.xml" "$file"
+          done
+
+      - name: Upload cobertura de código
+        uses: actions/upload-artifact@v4
+        with:
+          name: cobertura-code-coverage
+          path: '**/TestResults/**/*.xml'
+          retention-days: 7
