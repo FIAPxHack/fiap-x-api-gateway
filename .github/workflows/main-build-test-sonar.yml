@@ -44,31 +44,24 @@ jobs:
             /o:"fiapxhack" \
             /d:sonar.host.url="https://sonarcloud.io" \
             /d:sonar.token="$SONAR_TOKEN" \
-            /d:sonar.cs.vscoveragexml.reportsPaths="**/TestResults/**/*.xml" \
-            /d:sonar.coverage.exclusions="**/Program.cs,**/Migrations/**" \
-            /d:sonar.exclusions="**/bin/**,**/obj/**,**/*.dll,**/*.exe,**/Migrations/**"
+            /d:sonar.cs.opencover.reportsPaths="**/TestResults/**/coverage.opencover.xml" \
+            /d:sonar.exclusions="**/bin/**,**/obj/**,**/*.dll,**/*.exe,**/Migrations/**,**/tests/**"
 
       - name: Build for Analysis
         run: dotnet build --configuration Release --no-incremental
-
-      - name: Install Coverage Tools
-        run: dotnet tool install --global dotnet-coverage
       
       - name: Run Tests with Coverage
         run: |
           dotnet test --configuration Release --no-build --verbosity normal \
-            --collect:"Code Coverage"
+            --logger "trx;LogFileName=test-results.trx" \
+            --collect:"XPlat Code Coverage" \
+            --results-directory ./TestResults \
+            --settings coverlet.runsettings
       
-      - name: Convert Coverage to XML
+      - name: List Coverage Files
         run: |
-          echo "=== Converting .coverage files to XML ==="
-          for file in $(find . -name "*.coverage" -type f); do
-            echo "Converting: $file"
-            dotnet-coverage merge -f xml -o "${file%.coverage}.xml" "$file"
-          done
-          echo ""
-          echo "=== Converted XML files ==="
-          find . -name "*.xml" -path "*/TestResults/*" -type f -exec ls -lh {} \;
+          echo "=== Coverage files generated ==="
+          find . -name "coverage.opencover.xml" -type f -exec ls -lh {} \;
 
       - name: End SonarCloud Analysis
         env:
@@ -79,5 +72,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report
-          path: '**/TestResults/**/*.xml'
+          path: '**/TestResults/**/coverage.opencover.xml'
           retention-days: 30

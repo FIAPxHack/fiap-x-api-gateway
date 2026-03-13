@@ -24,26 +24,17 @@ jobs:
 
       - name: Build
         run: dotnet build --configuration Release --no-restore
-      
-      - name: Install dotnet-coverage tool
-        run: dotnet tool install --global dotnet-coverage
 
       - name: Rodar Testes e Cobertura
         run: |
           dotnet test --configuration Release --no-build --verbosity normal \
-            --collect:"Code Coverage"
-      
-      - name: Converter cobertura para XML
-        run: |
-          echo "=== Converting .coverage files to XML ==="
-          for file in $(find . -name "*.coverage" -type f); do
-            echo "Converting: $file"
-            dotnet-coverage merge -f xml -o "${file%.coverage}.xml" "$file"
-          done
+            --collect:"XPlat Code Coverage" \
+            --results-directory ./TestResults \
+            --settings coverlet.runsettings
 
       - name: Upload cobertura de código
         uses: actions/upload-artifact@v4
         with:
           name: cobertura-code-coverage
-          path: '**/TestResults/**/*.xml'
+          path: '**/TestResults/**/coverage.opencover.xml'
           retention-days: 7

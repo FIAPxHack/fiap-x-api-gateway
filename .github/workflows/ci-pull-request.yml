@@ -48,7 +48,6 @@ jobs:
       - name: Instalar ferramentas
         run: |
           dotnet tool install --global dotnet-sonarscanner
-          dotnet tool install --global dotnet-coverage
 
       - name: Executar Análise SonarCloud
         env:
@@ -60,14 +59,8 @@ jobs:
             /o:"fiapxhack" \
             /d:sonar.host.url="https://sonarcloud.io" \
             /d:sonar.token="$SONAR_TOKEN" \
-            /d:sonar.cs.vscoveragexml.reportsPaths="**/TestResults/**/*.xml" \
-            /d:sonar.coverage.exclusions="**/Program.cs,**/Migrations/**" \
-            /d:sonar.exclusions="**/bin/**,**/obj/**,**/*.dll,**/*.exe,**/Migrations/**"
+            /d:sonar.cs.opencover.reportsPaths="**/TestResults/**/coverage.opencover.xml" \
+            /d:sonar.exclusions="**/bin/**,**/obj/**,**/*.dll,**/*.exe,**/Migrations/**,**/tests/**"
           dotnet build --configuration Release --no-incremental
-          dotnet test --configuration Release --no-build --collect:"Code Coverage"
-          echo "=== Converting .coverage files to XML ==="
-          for file in $(find . -name "*.coverage" -type f); do
-            echo "Converting: $file"
-            dotnet-coverage merge -f xml -o "${file%.coverage}.xml" "$file"
-          done
+          dotnet test --configuration Release --no-build --logger "trx;LogFileName=test-results.trx" --collect:"XPlat Code Coverage" --settings coverlet.runsettings
           dotnet sonarscanner end /d:sonar.token="$SONAR_TOKEN"
