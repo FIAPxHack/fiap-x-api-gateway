@@ -61,13 +61,23 @@ jobs:
             /d:sonar.host.url="https://sonarcloud.io" \
             /d:sonar.token="$SONAR_TOKEN" \
             /d:sonar.cs.vscoveragexml.reportsPaths="**/TestResults/**/*.xml" \
-            /d:sonar.coverage.exclusions="**/Program.cs,**/Migrations/**" \
+            /d:sonar.coverage.exclusions="**/tests/**/*" \
             /d:sonar.exclusions="**/bin/**,**/obj/**,**/*.dll,**/*.exe,**/Migrations/**"
-          dotnet build --configuration Release --no-incremental
-          dotnet test --configuration Release --no-build --collect:"Code Coverage"
+          
+          dotnet build fiap-x-api-gateway.sln --configuration Release --no-incremental
+          
+          dotnet test fiap-x-api-gateway.sln \
+            --configuration Release \
+            --no-build \
+            --collect:"Code Coverage"
+          
           echo "=== Converting .coverage files to XML ==="
           for file in $(find . -name "*.coverage" -type f); do
             echo "Converting: $file"
             dotnet-coverage merge -f xml -o "${file%.coverage}.xml" "$file"
           done
+          
+          echo "=== Converted XML files ==="
+          find . -name "*.xml" -path "*/TestResults/*" -type f -exec ls -lh {} \;
+          
           dotnet sonarscanner end /d:sonar.token="$SONAR_TOKEN"

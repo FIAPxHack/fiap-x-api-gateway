@@ -30,7 +30,10 @@ jobs:
 
       - name: Rodar Testes e Cobertura
         run: |
-          dotnet test --configuration Release --no-build --verbosity normal \
+          dotnet test fiap-x-api-gateway.sln \
+            --configuration Release \
+            --no-build \
+            --verbosity normal \
             --collect:"Code Coverage"
       
       - name: Converter cobertura para XML
@@ -40,6 +43,11 @@ jobs:
             echo "Converting: $file"
             dotnet-coverage merge -f xml -o "${file%.coverage}.xml" "$file"
           done
+      
+      - name: Verificar arquivos de cobertura gerados
+        run: |
+          echo "=== Converted XML files ==="
+          find . -name "*.xml" -path "*/TestResults/*" -type f -exec ls -lh {} \;
 
       - name: Upload cobertura de código
         uses: actions/upload-artifact@v4
