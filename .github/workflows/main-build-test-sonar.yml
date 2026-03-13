@@ -44,15 +44,19 @@ jobs:
             /o:"fiapxhack" \
             /d:sonar.host.url="https://sonarcloud.io" \
             /d:sonar.token="$SONAR_TOKEN" \
-            /d:sonar.cs.opencover.reportsPaths="**/TestResults/**/coverage.opencover.xml" \
-            /d:sonar.exclusions="**/bin/**,**/obj/**,**/*.dll,**/*.exe,**/Migrations/**,**/tests/**"
+            /d:sonar.cs.opencover.reportsPaths="**/coverage.opencover.xml" \
+            /d:sonar.coverage.exclusions="**/tests/**/*" \
+            /d:sonar.exclusions="**/bin/**,**/obj/**,**/*.dll,**/*.exe,**/Migrations/**"
 
       - name: Build for Analysis
-        run: dotnet build --configuration Release --no-incremental
+        run: dotnet build fiap-x-api-gateway.sln --configuration Release --no-incremental
       
       - name: Run Tests with Coverage
         run: |
-          dotnet test --configuration Release --no-build --verbosity normal \
+          dotnet test fiap-x-api-gateway.sln \
+            --configuration Release \
+            --no-build \
+            --verbosity normal \
             --logger "trx;LogFileName=test-results.trx" \
             --collect:"XPlat Code Coverage" \
             --results-directory ./TestResults \

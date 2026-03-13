@@ -59,8 +59,21 @@ jobs:
             /o:"fiapxhack" \
             /d:sonar.host.url="https://sonarcloud.io" \
             /d:sonar.token="$SONAR_TOKEN" \
-            /d:sonar.cs.opencover.reportsPaths="**/TestResults/**/coverage.opencover.xml" \
-            /d:sonar.exclusions="**/bin/**,**/obj/**,**/*.dll,**/*.exe,**/Migrations/**,**/tests/**"
-          dotnet build --configuration Release --no-incremental
-          dotnet test --configuration Release --no-build --logger "trx;LogFileName=test-results.trx" --collect:"XPlat Code Coverage" --settings coverlet.runsettings
+            /d:sonar.cs.opencover.reportsPaths="**/coverage.opencover.xml" \
+            /d:sonar.coverage.exclusions="**/tests/**/*" \
+            /d:sonar.exclusions="**/bin/**,**/obj/**,**/*.dll,**/*.exe,**/Migrations/**"
+          
+          dotnet build fiap-x-api-gateway.sln --configuration Release --no-incremental
+          
+          dotnet test fiap-x-api-gateway.sln \
+            --configuration Release \
+            --no-build \
+            --logger "trx;LogFileName=test-results.trx" \
+            --collect:"XPlat Code Coverage" \
+            --results-directory ./TestResults \
+            --settings coverlet.runsettings
+          
+          echo "=== Verificando arquivos de cobertura gerados ==="
+          find . -name "coverage.opencover.xml" -type f -exec ls -lh {} \;
+          
           dotnet sonarscanner end /d:sonar.token="$SONAR_TOKEN"
