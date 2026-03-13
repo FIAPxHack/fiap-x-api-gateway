@@ -49,6 +49,7 @@ jobs:
         run: |
           dotnet tool install --global dotnet-sonarscanner
           dotnet tool install --global dotnet-coverage
+          dotnet tool install --global dotnet-reportgenerator-globaltool
 
       - name: Executar Análise SonarCloud
         env:
@@ -60,7 +61,7 @@ jobs:
             /o:"fiapxhack" \
             /d:sonar.host.url="https://sonarcloud.io" \
             /d:sonar.token="$SONAR_TOKEN" \
-            /d:sonar.cs.vscoveragexml.reportsPaths="**/TestResults/**/*.xml" \
+            /d:sonar.cs.opencover.reportsPaths="coverage/coverage.opencover.xml" \
             /d:sonar.coverage.exclusions="**/tests/**/*" \
             /d:sonar.exclusions="**/bin/**,**/obj/**,**/*.dll,**/*.exe,**/Migrations/**"
           
@@ -69,15 +70,20 @@ jobs:
           dotnet test fiap-x-api-gateway.sln \
             --configuration Release \
             --no-build \
-            --collect:"Code Coverage"
+            --collect:"Code Coverage" \
+            --results-directory ./TestResults
           
-          echo "=== Converting .coverage files to XML ==="
-          for file in $(find . -name "*.coverage" -type f); do
-            echo "Converting: $file"
-            dotnet-coverage merge -f xml -o "${file%.coverage}.xml" "$file"
-          done
+          echo "=== Converting .coverage to Cobertura XML ==="
+          dotnet-coverage merge ./TestResults/**/*.coverage -f cobertura -o coverage.cobertura.xml
           
-          echo "=== Converted XML files ==="
-          find . -name "*.xml" -path "*/TestResults/*" -type f -exec ls -lh {} \;
+          echo "=== Converting Cobertura to OpenCover format ==="
+          reportgenerator \
+            -reports:"coverage.cobertura.xml" \
+            -targetdir:"coverage" \
+            -reporttypes:"OpenCover" \
+            -assemblyfilters:"+Gateway;-Gateway.Tests"
+          
+          echo "=== Generated coverage file ==="
+          ls -lh coverage/coverage.opencover.xml
           
           dotnet sonarscanner end /d:sonar.token="$SONAR_TOKEN"

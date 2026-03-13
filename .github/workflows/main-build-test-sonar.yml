@@ -35,7 +35,9 @@ jobs:
         run: dotnet tool install --global dotnet-sonarscanner
       
       - name: Install Coverage Tools
-        run: dotnet tool install --global dotnet-coverage
+        run: |
+          dotnet tool install --global dotnet-coverage
+          dotnet tool install --global dotnet-reportgenerator-globaltool
 
       - name: Begin SonarCloud Analysis
         env:
@@ -47,7 +49,7 @@ jobs:
             /o:"fiapxhack" \
             /d:sonar.host.url="https://sonarcloud.io" \
             /d:sonar.token="$SONAR_TOKEN" \
-            /d:sonar.cs.vscoveragexml.reportsPaths="**/TestResults/**/*.xml" \
+            /d:sonar.cs.opencover.reportsPaths="coverage/coverage.opencover.xml" \
             /d:sonar.coverage.exclusions="**/tests/**/*" \
             /d:sonar.exclusions="**/bin/**,**/obj/**,**/*.dll,**/*.exe,**/Migrations/**"
 
@@ -60,18 +62,23 @@ jobs:
             --configuration Release \
             --no-build \
             --verbosity normal \
-            --collect:"Code Coverage"
+            --collect:"Code Coverage" \
+            --results-directory ./TestResults
       
-      - name: Convert Coverage to XML
+      - name: Convert Coverage to OpenCover
         run: |
-          echo "=== Converting .coverage files to XML ==="
-          for file in $(find . -name "*.coverage" -type f); do
-            echo "Converting: $file"
-            dotnet-coverage merge -f xml -o "${file%.coverage}.xml" "$file"
-          done
-          echo ""
-          echo "=== Converted XML files ==="
-          find . -name "*.xml" -path "*/TestResults/*" -type f -exec ls -lh {} \;
+          echo "=== Converting .coverage to Cobertura XML ==="
+          dotnet-coverage merge ./TestResults/**/*.coverage -f cobertura -o coverage.cobertura.xml
+          
+          echo "=== Converting Cobertura to OpenCover format ==="
+          reportgenerator \
+            -reports:"coverage.cobertura.xml" \
+            -targetdir:"coverage" \
+            -reporttypes:"OpenCover" \
+            -assemblyfilters:"+Gateway;-Gateway.Tests"
+          
+          echo "=== Generated coverage file ==="
+          ls -lh coverage/coverage.opencover.xml
 
       - name: End SonarCloud Analysis
         env:
@@ -82,5 +89,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report
-          path: '**/TestResults/**/*.xml'
+          path: 'coverage/coverage.opencover.xml'
           retention-days: 30
