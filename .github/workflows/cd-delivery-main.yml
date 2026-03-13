@@ -1,0 +1,135 @@
+name: "[Etapa 2] Entrega Contínua"
+
+on:
+  push:
+    branches: [ "main" ]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # 1. Build e Testes
+  build-and-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Configurar .NET SDK 9.0
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Restaurar dependências
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --configuration Release --no-restore
+
+      - name: Rodar Testes
+        run: dotnet test --no-build --configuration Release --verbosity normal
+
+  # 2. Análise SonarQube
+  sonarqube-analysis:
+    runs-on: ubuntu-latest
+    needs: build-and-tests
+    steps:
+      - name: Fazer checkout do repositório (com histórico completo)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configurar .NET SDK 9.0
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Instalar SonarScanner para .NET
+        run: dotnet tool install --global dotnet-sonarscanner
+
+      - name: Cache SonarQube packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.sonar/cache
+          key: ${{ runner.os }}-sonar
+          restore-keys: ${{ runner.os }}-sonar
+
+      - name: Executar Análise SonarQube
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        run: |
+          dotnet sonarscanner begin \
+            /k:"FIAPxHack_fiap-x-api-gateway" \
+            /o:"fiapxhack" \
+            /d:sonar.token="${SONAR_TOKEN}" \
+            /d:sonar.host.url="${SONAR_HOST_URL}" \
+            /d:sonar.cs.opencover.reportsPaths="**/coverage.opencover.xml"
+          
+          dotnet build --configuration Release
+          
+          dotnet sonarscanner end /d:sonar.token="${SONAR_TOKEN}"
+
+  # 3. Build e Push da Imagem Docker
+  docker-build-push:
+    runs-on: ubuntu-latest
+    needs: sonarqube-analysis
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+
+    steps:
+      - name: Fazer checkout do repositório
+        uses: actions/checkout@v4
+
+      - name: Instalar cosign
+        if: github.event_name != 'pull_request'
+        uses: sigstore/cosign-installer@59acb6260d9c0ba8f4a2f9d9b48431a222b68e20
+        with:
+          cosign-release: 'v2.2.4'
+
+      - name: Configurar Docker Buildx
+        uses: docker/setup-buildx-action@f95db51fddba0c2d1ec667646a06c2ce06100226
+
+      - name: Login no registro ${{ env.REGISTRY }}
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Exportar nome da imagem em lowercase
+        shell: bash
+        run: |
+          echo "IMAGE_NAME_LC=${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
+
+      - name: Extrair metadados Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LC }}
+          tags: |
+            latest
+
+      - name: Construir e enviar imagem Docker
+        id: docker-build-and-push-image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LC }}:latest
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Assinar a imagem Docker publicada
+        if: ${{ github.event_name != 'pull_request' }}
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+          DIGEST: ${{ steps.docker-build-and-push-image.outputs.digest }}
+        run: |
+          echo "${TAGS}" | xargs -I {} cosign sign --yes {}@${DIGEST}

@@ -1,0 +1,83 @@
+name: "[Main] Build, Test & SonarCloud Analysis"
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+    types: [opened, synchronize, reopened]
+
+jobs:
+  build-test-and-analyze:
+    name: Build, Test & Analyze
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --configuration Release --no-restore
+
+      - name: Install SonarCloud Scanner
+        run: dotnet tool install --global dotnet-sonarscanner
+
+      - name: Begin SonarCloud Analysis
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          dotnet sonarscanner begin \
+            /k:"mana-food_mana-food-api-gateway" \
+            /o:"mana-food" \
+            /d:sonar.host.url="https://sonarcloud.io" \
+            /d:sonar.token="$SONAR_TOKEN" \
+            /d:sonar.cs.vscoveragexml.reportsPaths="**/TestResults/**/*.xml" \
+            /d:sonar.coverage.exclusions="**/Program.cs,**/Migrations/**" \
+            /d:sonar.exclusions="**/bin/**,**/obj/**,**/*.dll,**/*.exe,**/Migrations/**"
+
+      - name: Build for Analysis
+        run: dotnet build --configuration Release --no-incremental
+
+      - name: Install Coverage Tools
+        run: dotnet tool install --global dotnet-coverage
+      
+      - name: Run Tests with Coverage
+        run: |
+          dotnet test --configuration Release --no-build --verbosity normal \
+            --collect:"Code Coverage"
+      
+      - name: Convert Coverage to XML
+        run: |
+          echo "=== Converting .coverage files to XML ==="
+          for file in $(find . -name "*.coverage" -type f); do
+            echo "Converting: $file"
+            dotnet-coverage merge -f xml -o "${file%.coverage}.xml" "$file"
+          done
+          echo ""
+          echo "=== Converted XML files ==="
+          find . -name "*.xml" -path "*/TestResults/*" -type f -exec ls -lh {} \;
+
+      - name: End SonarCloud Analysis
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: dotnet sonarscanner end /d:sonar.token="$SONAR_TOKEN"
+
+      - name: Upload Coverage Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: '**/TestResults/**/*.xml'
+          retention-days: 30
