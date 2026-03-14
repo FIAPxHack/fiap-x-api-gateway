@@ -27,13 +27,13 @@ public class JwtConfigurationTests
     [Theory]
     [InlineData("", "issuer", "audience", "JWT Secret is required")]
     [InlineData("   ", "issuer", "audience", "JWT Secret is required")]
-    [InlineData(null, "issuer", "audience", "JWT Secret is required")]
+    [InlineData((string)null!, "issuer", "audience", "JWT Secret is required")]
     [InlineData("secret", "", "audience", "JWT Issuer is required")]
     [InlineData("secret", "   ", "audience", "JWT Issuer is required")]
-    [InlineData("secret", null, "audience", "JWT Issuer is required")]
+    [InlineData("secret", (string)null!, "audience", "JWT Issuer is required")]
     [InlineData("secret", "issuer", "", "JWT Audience is required")]
     [InlineData("secret", "issuer", "   ", "JWT Audience is required")]
-    [InlineData("secret", "issuer", null, "JWT Audience is required")]
+    [InlineData("secret", "issuer", (string)null!, "JWT Audience is required")]
     public void Validate_WithMissingProperty_ShouldThrowInvalidOperationException(
         string secret, string issuer, string audience, string expectedMessage)
     {

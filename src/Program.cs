@@ -43,7 +43,7 @@ app.MapGet("/healthz", () => Results.Ok(new { status = "ok", timestamp = DateTim
 
 app.MapReverseProxy();
 
-app.Run();
+await app.RunAsync();
 
 // Make Program class visible for integration tests
-public partial class Program { }
+public static partial class Program { }

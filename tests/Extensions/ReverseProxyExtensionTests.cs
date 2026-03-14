@@ -106,19 +106,19 @@ public class ReverseProxyExtensionTests
 
         var authCluster = proxyConfig.Clusters.First(c => c.ClusterId == "authCluster");
         authCluster.Destinations.Should().ContainKey("authDestination");
-        authCluster.Destinations["authDestination"].Address.Should().Be("http://auth-service:8080");
+        authCluster.Destinations!["authDestination"]!.Address.Should().Be("http://auth-service:8080");
 
         var userCluster = proxyConfig.Clusters.First(c => c.ClusterId == "userServiceCluster");
         userCluster.Destinations.Should().ContainKey("userServiceDestination");
-        userCluster.Destinations["userServiceDestination"].Address.Should().Be("http://localhost:8080");
+        userCluster.Destinations!["userServiceDestination"]!.Address.Should().Be("http://localhost:8080");
 
         var videoCluster = proxyConfig.Clusters.First(c => c.ClusterId == "videoProcessingCluster");
         videoCluster.Destinations.Should().ContainKey("videoProcessingDestination");
-        videoCluster.Destinations["videoProcessingDestination"].Address.Should().Be("http://video-service:8080");
+        videoCluster.Destinations!["videoProcessingDestination"]!.Address.Should().Be("http://video-service:8080");
 
         var notifCluster = proxyConfig.Clusters.First(c => c.ClusterId == "notificationCluster");
         notifCluster.Destinations.Should().ContainKey("notificationDestination");
-        notifCluster.Destinations["notificationDestination"].Address.Should().Be("http://notification-service:8080");
+        notifCluster.Destinations!["notificationDestination"]!.Address.Should().Be("http://notification-service:8080");
     }
 
     [Fact]
