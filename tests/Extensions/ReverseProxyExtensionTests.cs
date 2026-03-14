@@ -1,5 +1,7 @@
+using ApiGateway.Constants;
 using ApiGateway.Extensions;
 using FluentAssertions;
+using Gateway.Tests.Helpers;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -9,219 +11,160 @@ namespace Gateway.Tests.Extensions;
 
 public class ReverseProxyExtensionTests
 {
+    private static IProxyConfig BuildProxyConfig(IConfiguration? configuration = null)
+    {
+        var services = new ServiceCollection();
+        configuration ??= TestConfigurationHelper.CreateServicesConfiguration();
+        services.AddGatewayReverseProxy(configuration);
+        var serviceProvider = services.BuildServiceProvider();
+        return serviceProvider.GetRequiredService<IProxyConfigProvider>().GetConfig();
+    }
+
     [Fact]
     public void AddGatewayReverseProxy_WithValidConfiguration_ShouldRegisterServices()
     {
-        // Arrange
         var services = new ServiceCollection();
-        var configuration = CreateConfiguration();
+        services.AddGatewayReverseProxy(TestConfigurationHelper.CreateServicesConfiguration());
 
-        // Act
-        services.AddGatewayReverseProxy(configuration);
-
-        // Assert
         var serviceProvider = services.BuildServiceProvider();
-        var proxyConfigProvider = serviceProvider.GetService<IProxyConfigProvider>();
-        proxyConfigProvider.Should().NotBeNull();
+        serviceProvider.GetService<IProxyConfigProvider>().Should().NotBeNull();
     }
 
     [Fact]
     public void AddGatewayReverseProxy_WithMissingConfiguration_ShouldThrowException()
     {
-        // Arrange
         var services = new ServiceCollection();
         var configuration = new ConfigurationBuilder().Build();
 
-        // Act
         var act = () => services.AddGatewayReverseProxy(configuration);
 
-        // Assert
         act.Should().Throw<InvalidOperationException>()
             .WithMessage("Services configuration is missing");
     }
 
-    [Fact]
-    public void AddGatewayReverseProxy_WithInvalidUserServiceUrl_ShouldThrowException()
+    [Theory]
+    [InlineData("invalid-url", "http://auth:8080", "http://video:8080", "http://notif:8080", "UserService URL é inválida: invalid-url")]
+    [InlineData("http://localhost:8080", "not-a-url", "http://video:8080", "http://notif:8080", "AuthService URL é inválida: not-a-url")]
+    [InlineData("http://localhost:8080", "http://auth:8080", "invalid-url", "http://notif:8080", "VideoProcessingService URL é inválida: invalid-url")]
+    [InlineData("http://localhost:8080", "http://auth:8080", "http://video:8080", "not-valid", "NotificationService URL é inválida: not-valid")]
+    public void AddGatewayReverseProxy_WithInvalidServiceUrl_ShouldThrowException(
+        string userUrl, string authUrl, string videoUrl, string notifUrl, string expectedMessage)
     {
-        // Arrange
         var services = new ServiceCollection();
-        var configData = new Dictionary<string, string>
-        {
-            { "Services:UserService:Url", "invalid-url" },
-            { "Services:AuthService:Url", "http://auth-service:8080" },
-            { "Services:VideoProcessingService:Url", "http://video-service:8080" },
-            { "Services:NotificationService:Url", "http://notification-service:8080" }
-        };
-        var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(configData!)
-            .Build();
+        var configuration = TestConfigurationHelper.CreateServicesConfiguration(userUrl, authUrl, videoUrl, notifUrl);
 
-        // Act
         var act = () => services.AddGatewayReverseProxy(configuration);
 
-        // Assert
         act.Should().Throw<InvalidOperationException>()
-            .WithMessage("UserService URL é inválida: invalid-url");
+            .WithMessage(expectedMessage);
     }
 
-    [Fact]
-    public void AddGatewayReverseProxy_WithInvalidAuthServiceUrl_ShouldThrowException()
+    [Theory]
+    [InlineData("", "http://auth:8080", "http://video:8080", "http://notif:8080", "UserService URL é obrigatória")]
+    [InlineData("http://localhost:8080", "", "http://video:8080", "http://notif:8080", "AuthService URL é obrigatória")]
+    [InlineData("http://localhost:8080", "http://auth:8080", "", "http://notif:8080", "VideoProcessingService URL é obrigatória")]
+    [InlineData("http://localhost:8080", "http://auth:8080", "http://video:8080", "", "NotificationService URL é obrigatória")]
+    public void AddGatewayReverseProxy_WithEmptyServiceUrl_ShouldThrowException(
+        string userUrl, string authUrl, string videoUrl, string notifUrl, string expectedMessage)
     {
-        // Arrange
         var services = new ServiceCollection();
-        var configData = new Dictionary<string, string>
-        {
-            { "Services:UserService:Url", "http://localhost:8080" },
-            { "Services:AuthService:Url", "not-a-url" }
-        };
-        var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(configData!)
-            .Build();
+        var configuration = TestConfigurationHelper.CreateServicesConfiguration(userUrl, authUrl, videoUrl, notifUrl);
 
-        // Act
         var act = () => services.AddGatewayReverseProxy(configuration);
 
-        // Assert
         act.Should().Throw<InvalidOperationException>()
-            .WithMessage("AuthService URL é inválida: not-a-url");
+            .WithMessage(expectedMessage);
     }
 
     [Fact]
-    public void AddGatewayReverseProxy_WithEmptyUserServiceUrl_ShouldThrowException()
+    public void AddGatewayReverseProxy_ShouldConfigureAllExpectedRoutes()
     {
-        // Arrange
-        var services = new ServiceCollection();
-        var configData = new Dictionary<string, string>
+        var proxyConfig = BuildProxyConfig();
+
+        var expectedRouteIds = new[]
         {
-            { "Services:UserService:Url", "" },
-            { "Services:AuthService:Url", "http://auth-service:8080" },
-            { "Services:VideoProcessingService:Url", "http://video-service:8080" },
-            { "Services:NotificationService:Url", "http://notification-service:8080" }
+            "auth-login",
+            "users-create", "users-list", "users-get-by-id", "users-update", "users-delete",
+            "video-upload", "video-status", "video-update-status", "video-download", "video-list-user",
+            "notification-send", "notification-user-list"
         };
-        var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(configData!)
-            .Build();
 
-        // Act
-        var act = () => services.AddGatewayReverseProxy(configuration);
-
-        // Assert
-        act.Should().Throw<InvalidOperationException>()
-            .WithMessage("UserService URL é obrigatória");
-    }
-
-    [Fact]
-    public void AddGatewayReverseProxy_WithEmptyAuthLambdaUrl_ShouldThrowException()
-    {
-        // Arrange
-        var services = new ServiceCollection();
-        var configData = new Dictionary<string, string>
+        proxyConfig.Routes.Should().HaveCount(expectedRouteIds.Length);
+        foreach (var routeId in expectedRouteIds)
         {
-            { "Services:UserService:Url", "http://localhost:8080" },
-            { "Services:AuthService:Url", "" }
-        };
-        var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(configData!)
-            .Build();
-
-        // Act
-        var act = () => services.AddGatewayReverseProxy(configuration);
-
-        // Assert
-        act.Should().Throw<InvalidOperationException>()
-            .WithMessage("AuthService URL é obrigatória");
+            proxyConfig.Routes.Should().Contain(r => r.RouteId == routeId,
+                $"because {routeId} should be configured");
+        }
     }
 
     [Fact]
-    public void AddGatewayReverseProxy_ShouldConfigureRoutes()
+    public void AddGatewayReverseProxy_ShouldConfigureAllClusters()
     {
-        // Arrange
-        var services = new ServiceCollection();
-        var configuration = CreateConfiguration();
+        var proxyConfig = BuildProxyConfig();
 
-        // Act
-        services.AddGatewayReverseProxy(configuration);
-
-        // Assert
-        var serviceProvider = services.BuildServiceProvider();
-        var proxyConfigProvider = serviceProvider.GetRequiredService<IProxyConfigProvider>();
-        var proxyConfig = proxyConfigProvider.GetConfig();
-
-        proxyConfig.Routes.Should().NotBeEmpty();
-        proxyConfig.Routes.Should().HaveCountGreaterOrEqualTo(8);
-    }
-
-    [Fact]
-    public void AddGatewayReverseProxy_ShouldConfigureClusters()
-    {
-        // Arrange
-        var services = new ServiceCollection();
-        var configuration = CreateConfiguration();
-
-        // Act
-        services.AddGatewayReverseProxy(configuration);
-
-        // Assert
-        var serviceProvider = services.BuildServiceProvider();
-        var proxyConfigProvider = serviceProvider.GetRequiredService<IProxyConfigProvider>();
-        var proxyConfig = proxyConfigProvider.GetConfig();
-
-        proxyConfig.Clusters.Should().NotBeEmpty();
         proxyConfig.Clusters.Should().HaveCount(4);
+
+        var authCluster = proxyConfig.Clusters.First(c => c.ClusterId == "authCluster");
+        authCluster.Destinations.Should().ContainKey("authDestination");
+        authCluster.Destinations["authDestination"].Address.Should().Be("http://auth-service:8080");
+
+        var userCluster = proxyConfig.Clusters.First(c => c.ClusterId == "userServiceCluster");
+        userCluster.Destinations.Should().ContainKey("userServiceDestination");
+        userCluster.Destinations["userServiceDestination"].Address.Should().Be("http://localhost:8080");
+
+        var videoCluster = proxyConfig.Clusters.First(c => c.ClusterId == "videoProcessingCluster");
+        videoCluster.Destinations.Should().ContainKey("videoProcessingDestination");
+        videoCluster.Destinations["videoProcessingDestination"].Address.Should().Be("http://video-service:8080");
+
+        var notifCluster = proxyConfig.Clusters.First(c => c.ClusterId == "notificationCluster");
+        notifCluster.Destinations.Should().ContainKey("notificationDestination");
+        notifCluster.Destinations["notificationDestination"].Address.Should().Be("http://notification-service:8080");
     }
 
     [Fact]
-    public void AddGatewayReverseProxy_ShouldConfigureAuthCluster()
+    public void AddGatewayReverseProxy_AuthLoginRoute_ShouldBePublicWithTransform()
     {
-        // Arrange
-        var services = new ServiceCollection();
-        var configuration = CreateConfiguration();
+        var proxyConfig = BuildProxyConfig();
 
-        // Act
-        services.AddGatewayReverseProxy(configuration);
-
-        // Assert
-        var serviceProvider = services.BuildServiceProvider();
-        var proxyConfigProvider = serviceProvider.GetRequiredService<IProxyConfigProvider>();
-        var proxyConfig = proxyConfigProvider.GetConfig();
-
-        var authCluster = proxyConfig.Clusters.FirstOrDefault(c => c.ClusterId == "authCluster");
-        authCluster.Should().NotBeNull();
-        authCluster!.Destinations.Should().ContainKey("authDestination");
+        var route = proxyConfig.Routes.First(r => r.RouteId == "auth-login");
+        route.ClusterId.Should().Be("authCluster");
+        route.Match.Path.Should().Be("/api/auth/login");
+        route.Match.Methods.Should().Contain("POST");
+        route.Match.Methods.Should().Contain("OPTIONS");
+        route.AuthorizationPolicy.Should().BeNull();
     }
 
     [Fact]
-    public void AddGatewayReverseProxy_ShouldConfigureUserServiceCluster()
+    public void AddGatewayReverseProxy_UsersCreateRoute_ShouldBePublic()
     {
-        // Arrange
-        var services = new ServiceCollection();
-        var configuration = CreateConfiguration();
+        var proxyConfig = BuildProxyConfig();
 
-        // Act
-        services.AddGatewayReverseProxy(configuration);
-
-        // Assert
-        var serviceProvider = services.BuildServiceProvider();
-        var proxyConfigProvider = serviceProvider.GetRequiredService<IProxyConfigProvider>();
-        var proxyConfig = proxyConfigProvider.GetConfig();
-
-        var userCluster = proxyConfig.Clusters.FirstOrDefault(c => c.ClusterId == "userServiceCluster");
-        userCluster.Should().NotBeNull();
-        userCluster!.Destinations.Should().ContainKey("userServiceDestination");
+        var route = proxyConfig.Routes.First(r => r.RouteId == "users-create");
+        route.ClusterId.Should().Be("userServiceCluster");
+        route.Match.Path.Should().Be("/api/users");
+        route.Match.Methods.Should().Contain("POST");
+        route.AuthorizationPolicy.Should().BeNull();
     }
 
-    private static IConfiguration CreateConfiguration()
+    [Theory]
+    [InlineData("users-list", "userServiceCluster")]
+    [InlineData("users-get-by-id", "userServiceCluster")]
+    [InlineData("users-update", "userServiceCluster")]
+    [InlineData("users-delete", "userServiceCluster")]
+    [InlineData("video-upload", "videoProcessingCluster")]
+    [InlineData("video-status", "videoProcessingCluster")]
+    [InlineData("video-update-status", "videoProcessingCluster")]
+    [InlineData("video-download", "videoProcessingCluster")]
+    [InlineData("video-list-user", "videoProcessingCluster")]
+    [InlineData("notification-send", "notificationCluster")]
+    [InlineData("notification-user-list", "notificationCluster")]
+    public void AddGatewayReverseProxy_ProtectedRoutes_ShouldRequireAuthentication(
+        string routeId, string expectedClusterId)
     {
-        var configData = new Dictionary<string, string>
-        {
-            { "Services:UserService:Url", "http://localhost:8080" },
-            { "Services:AuthService:Url", "http://auth-service:8080" },
-            { "Services:VideoProcessingService:Url", "http://video-service:8080" },
-            { "Services:NotificationService:Url", "http://notification-service:8080" }
-        };
+        var proxyConfig = BuildProxyConfig();
 
-        return new ConfigurationBuilder()
-            .AddInMemoryCollection(configData!)
-            .Build();
+        var route = proxyConfig.Routes.First(r => r.RouteId == routeId);
+        route.ClusterId.Should().Be(expectedClusterId);
+        route.AuthorizationPolicy.Should().Be(Policies.AUTHENTICATED_USER);
     }
 }

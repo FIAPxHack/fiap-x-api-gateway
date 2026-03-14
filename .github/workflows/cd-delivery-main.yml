@@ -45,8 +45,16 @@ jobs:
         with:
           dotnet-version: '9.0.x'
 
+      - name: Restaurar dependências
+        run: dotnet restore
+
       - name: Instalar SonarScanner para .NET
         run: dotnet tool install --global dotnet-sonarscanner
+
+      - name: Instalar ferramentas de cobertura
+        run: |
+          dotnet tool install --global dotnet-coverage
+          dotnet tool install --global dotnet-reportgenerator-globaltool
 
       - name: Cache SonarQube packages
         uses: actions/cache@v4
@@ -65,9 +73,31 @@ jobs:
             /o:"fiapxhack" \
             /d:sonar.token="${SONAR_TOKEN}" \
             /d:sonar.host.url="${SONAR_HOST_URL}" \
-            /d:sonar.cs.opencover.reportsPaths="**/coverage.opencover.xml"
+            /d:sonar.cs.opencover.reportsPaths="coverage/coverage.opencover.xml" \
+            /d:sonar.coverage.exclusions="**/tests/**/*" \
+            /d:sonar.exclusions="**/bin/**,**/obj/**,**/*.dll,**/*.exe,**/Migrations/**"
           
-          dotnet build --configuration Release
+          dotnet build fiap-x-api-gateway.sln --configuration Release --no-incremental
+
+          dotnet test fiap-x-api-gateway.sln \
+            --configuration Release \
+            --no-build \
+            --verbosity normal \
+            --collect:"Code Coverage" \
+            --results-directory ./TestResults
+
+          echo "=== Converting .coverage to Cobertura XML ==="
+          dotnet-coverage merge ./TestResults/**/*.coverage -f cobertura -o coverage.cobertura.xml
+
+          echo "=== Converting Cobertura to OpenCover format ==="
+          reportgenerator \
+            -reports:"coverage.cobertura.xml" \
+            -targetdir:"coverage" \
+            -reporttypes:"OpenCover" \
+            -assemblyfilters:"+Gateway;-Gateway.Tests"
+
+          echo "=== Generated coverage file ==="
+          ls -lh coverage/coverage.opencover.xml
           
           dotnet sonarscanner end /d:sonar.token="${SONAR_TOKEN}"
 
