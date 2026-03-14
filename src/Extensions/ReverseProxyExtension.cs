@@ -11,6 +11,16 @@ public static class ReverseProxyExtension
     private const string VideoProcessingCluster = "videoProcessingCluster";
     private const string NotificationCluster = "notificationCluster";
 
+    private static readonly string[] HttpGet = new[] { "GET" };
+    private static readonly string[] HttpPost = new[] { "POST" };
+    private static readonly string[] HttpPut = new[] { "PUT" };
+    private static readonly string[] HttpDelete = new[] { "DELETE" };
+    private static readonly string[] HttpPostOptions = new[] { "POST", "OPTIONS" };
+    private static readonly IReadOnlyList<IReadOnlyDictionary<string, string>> PathRemovePrefixApi = new[]
+    {
+        new Dictionary<string, string> { ["PathRemovePrefix"] = "/api" }
+    };
+
     public static IServiceCollection AddGatewayReverseProxy(this IServiceCollection services, IConfiguration configuration)
     {
         var servicesConfig = configuration.GetSection("Services").Get<ServicesConfiguration>()
@@ -64,26 +74,26 @@ public static class ReverseProxyExtension
         return new[]
         {
             // AUTH - Login (público)
-            CreateRoute("auth-login", AuthCluster, "/api/auth/login", new[] { "POST", "OPTIONS" },
-                transforms: new[] { new Dictionary<string, string> { ["PathRemovePrefix"] = "/api" } }),
+            CreateRoute("auth-login", AuthCluster, "/api/auth/login", HttpPostOptions,
+                transforms: PathRemovePrefixApi),
 
             // USUÁRIOS
-            CreateRoute("users-create", UserServiceCluster, "/api/users", new[] { "POST" }),
-            CreateRoute("users-list", UserServiceCluster, "/api/users", new[] { "GET" }, authenticated),
-            CreateRoute("users-get-by-id", UserServiceCluster, "/api/users/{id}", new[] { "GET" }, authenticated),
-            CreateRoute("users-update", UserServiceCluster, "/api/users", new[] { "PUT" }, authenticated),
-            CreateRoute("users-delete", UserServiceCluster, "/api/users/{id}", new[] { "DELETE" }, authenticated),
+            CreateRoute("users-create", UserServiceCluster, "/api/users", HttpPost),
+            CreateRoute("users-list", UserServiceCluster, "/api/users", HttpGet, authenticated),
+            CreateRoute("users-get-by-id", UserServiceCluster, "/api/users/{id}", HttpGet, authenticated),
+            CreateRoute("users-update", UserServiceCluster, "/api/users", HttpPut, authenticated),
+            CreateRoute("users-delete", UserServiceCluster, "/api/users/{id}", HttpDelete, authenticated),
 
             // VIDEO PROCESSING
-            CreateRoute("video-upload", VideoProcessingCluster, "/api/videos/upload", new[] { "POST" }, authenticated),
-            CreateRoute("video-status", VideoProcessingCluster, "/api/videos/{id}/status", new[] { "GET" }, authenticated),
-            CreateRoute("video-update-status", VideoProcessingCluster, "/api/videos/{id}/status", new[] { "PUT" }, authenticated),
-            CreateRoute("video-download", VideoProcessingCluster, "/api/videos/{id}/download", new[] { "GET" }, authenticated),
-            CreateRoute("video-list-user", VideoProcessingCluster, "/api/videos/user/{userId}", new[] { "GET" }, authenticated),
+            CreateRoute("video-upload", VideoProcessingCluster, "/api/videos/upload", HttpPost, authenticated),
+            CreateRoute("video-status", VideoProcessingCluster, "/api/videos/{id}/status", HttpGet, authenticated),
+            CreateRoute("video-update-status", VideoProcessingCluster, "/api/videos/{id}/status", HttpPut, authenticated),
+            CreateRoute("video-download", VideoProcessingCluster, "/api/videos/{id}/download", HttpGet, authenticated),
+            CreateRoute("video-list-user", VideoProcessingCluster, "/api/videos/user/{userId}", HttpGet, authenticated),
 
             // NOTIFICATIONS
-            CreateRoute("notification-send", NotificationCluster, "/api/notifications/send", new[] { "POST" }, authenticated),
-            CreateRoute("notification-user-list", NotificationCluster, "/api/notifications/user/{userId}", new[] { "GET" }, authenticated)
+            CreateRoute("notification-send", NotificationCluster, "/api/notifications/send", HttpPost, authenticated),
+            CreateRoute("notification-user-list", NotificationCluster, "/api/notifications/user/{userId}", HttpGet, authenticated)
         };
     }
 
