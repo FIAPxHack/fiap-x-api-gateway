@@ -46,4 +46,7 @@ app.MapReverseProxy();
 await app.RunAsync();
 
 // Make Program class visible for integration tests
-public static partial class Program { }
+public partial class Program 
+{
+    protected Program() { }
+}
