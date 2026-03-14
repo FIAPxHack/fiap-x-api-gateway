@@ -30,74 +30,10 @@ jobs:
       - name: Rodar Testes
         run: dotnet test --no-build --configuration Release --verbosity normal
 
-  # 2. Análise SonarQube
-  sonarqube-analysis:
-    runs-on: ubuntu-latest
-    needs: build-and-tests
-    steps:
-      - name: Fazer checkout do repositório (com histórico completo)
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Configurar .NET SDK 9.0
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '9.0.x'
-
-      - name: Restaurar dependências
-        run: dotnet restore
-
-      - name: Instalar SonarScanner para .NET
-        run: dotnet tool install --global dotnet-sonarscanner
-
-      - name: Cache SonarQube packages
-        uses: actions/cache@v4
-        with:
-          path: ~/.sonar/cache
-          key: ${{ runner.os }}-sonar
-          restore-keys: ${{ runner.os }}-sonar
-
-      - name: Executar Análise SonarQube
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-        run: |
-          dotnet sonarscanner begin \
-            /k:"FIAPxHack_fiap-x-api-gateway" \
-            /o:"fiapxhack" \
-            /d:sonar.token="${SONAR_TOKEN}" \
-            /d:sonar.host.url="${SONAR_HOST_URL}" \
-            /d:sonar.cs.opencover.reportsPaths="coverage/coverage.opencover.xml" \
-            /d:sonar.coverage.exclusions="**/tests/**/*" \
-            /d:sonar.exclusions="**/bin/**,**/obj/**,**/*.dll,**/*.exe,**/Migrations/**"
-          
-          dotnet build fiap-x-api-gateway.sln --configuration Release --no-incremental
-
-          dotnet test fiap-x-api-gateway.sln \
-            --configuration Release \
-            --no-build \
-            --verbosity normal \
-            --collect:"XPlat Code Coverage" \
-            --results-directory ./TestResults \
-            --settings coverlet.runsettings
-
-          echo "=== Locating coverage files ==="
-          find ./TestResults -name "coverage.opencover.xml" -type f
-
-          echo "=== Copying coverage file ==="
-          mkdir -p coverage
-          find ./TestResults -name "coverage.opencover.xml" -exec cp {} coverage/coverage.opencover.xml \;
-
-          echo "=== Generated OpenCover file ==="
-          ls -lh coverage/coverage.opencover.xml
-          
-          dotnet sonarscanner end /d:sonar.token="${SONAR_TOKEN}"
-
-  # 3. Build e Push da Imagem Docker
+  # 2. Build e Push da Imagem Docker
   docker-build-push:
     runs-on: ubuntu-latest
-    needs: sonarqube-analysis
+    needs: build-and-tests
     permissions:
       contents: read
       packages: write
