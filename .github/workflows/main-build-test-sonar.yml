@@ -28,9 +28,6 @@ jobs:
       - name: Restore dependencies
         run: dotnet restore
 
-      - name: Build
-        run: dotnet build --configuration Release --no-restore
-
       - name: Install SonarCloud Scanner
         run: dotnet tool install --global dotnet-sonarscanner
 
@@ -44,7 +41,7 @@ jobs:
             /o:"fiapxhack" \
             /d:sonar.host.url="https://sonarcloud.io" \
             /d:sonar.token="$SONAR_TOKEN" \
-            /d:sonar.cs.opencover.reportsPaths="coverage/coverage.opencover.xml" \
+            /d:sonar.cs.opencover.reportsPaths="**/TestResults/**/coverage.opencover.xml" \
             /d:sonar.coverage.exclusions="**/tests/**/*" \
             /d:sonar.exclusions="**/bin/**,**/obj/**,**/*.dll,**/*.exe,**/Migrations/**"
 
@@ -61,17 +58,12 @@ jobs:
             --results-directory ./TestResults \
             --settings coverlet.runsettings
       
-      - name: Copy Coverage File
+      - name: Debug Coverage Files
         run: |
           echo "=== Locating coverage files ==="
           find ./TestResults -name "coverage.opencover.xml" -type f
-          
-          echo "=== Copying coverage file ==="
-          mkdir -p coverage
-          find ./TestResults -name "coverage.opencover.xml" -exec cp {} coverage/coverage.opencover.xml \;
-          
-          echo "=== Generated OpenCover file ==="
-          ls -lh coverage/coverage.opencover.xml
+          echo "=== Checking file paths inside report ==="
+          head -20 $(find ./TestResults -name "coverage.opencover.xml" -type f | head -1)
 
       - name: End SonarCloud Analysis
         env:
@@ -82,5 +74,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report
-          path: 'coverage/coverage.opencover.xml'
+          path: '**/TestResults/**/coverage.opencover.xml'
           retention-days: 30
